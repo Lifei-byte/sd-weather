@@ -59,12 +59,34 @@ def load_json(path):
         return None
 
 
-def write_json(path, obj):
+VOLATILE_KEYS = ('fetchedAt', 'generatedAt')
+
+
+def _stable(obj):
+    """剥掉每次运行都变的时间戳，用于判断内容是否真的变了。"""
+    if isinstance(obj, dict):
+        return {k: _stable(v) for k, v in obj.items() if k not in VOLATILE_KEYS}
+    if isinstance(obj, list):
+        return [_stable(v) for v in obj]
+    return obj
+
+
+def write_json(path, obj, skip_if_same=False):
+    """skip_if_same=True 时，剥掉时间戳后与旧文件一致就不写。
+
+    years_/months_ 这类由历史文件派生的数据，数据没变就不该重写——否则
+    每天 768 个文件都因时间戳变化产生新 blob，一年能撑爆仓库。
+    """
+    if skip_if_same:
+        old = load_json(path)
+        if old is not None and _stable(old) == _stable(obj):
+            return False
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(obj, f, ensure_ascii=False)
     os.replace(tmp, path)
+    return True
 
 
 def month_range(since, today):
@@ -168,7 +190,7 @@ def gen_months_file(code, months):
             have.append(m)
     write_json(os.path.join(DATA, f'months_{code}.json'),
                {'latest': have[-1] if have else None, 'months': have,
-                'fetchedAt': time.time()})
+                'fetchedAt': time.time()}, skip_if_same=True)
     return have
 
 
@@ -185,7 +207,8 @@ def gen_years(code, today):
                     years[str(y)] = weather_api.month_daily_means(h['series'][attr])
             write_json(os.path.join(DATA, f'years_{code}_{mm:02d}_{attr}.json'),
                        {'month': mm, 'attribute': attr, 'unit': UNITS[attr],
-                        'years': years, 'fetchedAt': time.time()})
+                        'years': years, 'fetchedAt': time.time()},
+                       skip_if_same=True)
 
 
 def build_site(cities, latest_months, run):
