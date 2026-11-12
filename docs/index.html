@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>山东省城市气象数据平台</title>
+<script src="echarts.min.js"></script>
+<script>window.WX_STATIC = true;</script>
+<style>
+  :root {
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --ink-1: #0b0b0b;
+    --ink-2: #52514e;
+    --ink-3: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;   /* 蓝：单序列主色 / 2024 */
+    --series-2: #eb6834;   /* 橙：2025 */
+    --series-3: #1baf7a;   /* 青：2026 */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink-1);
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; padding: 8px 0 4px; }
+  header.top h1 { font-size: 20px; margin: 0; font-weight: 700; }
+  header.top .sub { color: var(--ink-2); font-size: 13px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; margin: 10px 0; }
+  .controls label { font-size: 13px; color: var(--ink-2); margin-right: 6px; }
+  select {
+    font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--surface-1); color: var(--ink-1); min-width: 90px;
+  }
+  .tabs { display: flex; gap: 4px; margin: 12px 0 0; border-bottom: 1px solid var(--border); }
+  .tabs button {
+    font: inherit; font-size: 14px; padding: 8px 14px; border: none; background: none;
+    color: var(--ink-2); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tabs button.on { color: var(--ink-1); font-weight: 600; border-bottom-color: var(--series-1); }
+  .attr-tabs { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .attr-tabs button { font: inherit; font-size: 13px; padding: 5px 12px; border: none;
+    background: var(--surface-1); color: var(--ink-2); cursor: pointer; }
+  .attr-tabs button + button { border-left: 1px solid var(--border); }
+  .attr-tabs button.on { background: var(--series-1); color: #fff; font-weight: 600; }
+  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px; margin-top: 12px; }
+  .chart { width: 100%; height: 460px; }
+  .note { color: var(--ink-3); font-size: 12px; margin-top: 8px; }
+  .empty { color: var(--ink-2); text-align: center; padding: 80px 0; font-size: 14px; }
+  .err { background: #fdf1f0; border: 1px solid #e34948; color: #8a2b2a; border-radius: 8px;
+    padding: 10px 14px; margin-top: 12px; font-size: 13px; display: none; white-space: pre-wrap; }
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .stat { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 18px; min-width: 130px; }
+  .stat .lab { font-size: 12px; color: var(--ink-2); }
+  .stat .val { font-size: 24px; font-weight: 700; margin-top: 2px; }
+  .stat .val small { font-size: 12px; font-weight: 400; color: var(--ink-2); margin-left: 2px; }
+  table.daily { width: 100%; border-collapse: collapse; font-size: 13px;
+    font-variant-numeric: tabular-nums; margin-top: 4px; }
+  table.daily th { text-align: right; font-weight: 700; padding: 8px 10px;
+    border-bottom: 2px solid var(--baseline); white-space: nowrap; }
+  table.daily th:first-child, table.daily td:first-child { text-align: left; }
+  table.daily td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--gridline); }
+  table.daily tr.today td { font-weight: 700; }
+  .tbl-wrap { max-height: 560px; overflow-y: auto; }
+  .loading { color: var(--ink-2); font-size: 13px; padding: 8px 2px; display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>山东省城市气象数据平台</h1>
+    <span class="sub">历史 ERA5 再分析（2024-01 起，逐小时）· 未来 45 天预报（每日 20:00 起报）· 时间均为北京时间</span>
+    <span class="sub" id="metaInfo"></span>
+  </header>
+
+  <div class="controls">
+    <span>
+      <label for="city">城市</label>
+      <select id="city"></select>
+    </span>
+    <div class="tabs" style="margin:0; border-bottom:none; flex:1; justify-content:flex-end;">
+      <button data-tab="hist" class="on">历史逐小时</button>
+      <button data-tab="fc">45天预测</button>
+      <button data-tab="daily">预测日报表</button>
+      <button data-tab="cmp">同月多年对比</button>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="loading" id="loading">数据加载中，首次查询需要调用上游接口，请稍候…</div>
+
+  <!-- Tab1 历史逐小时 -->
+  <div class="panel" id="panel-hist">
+    <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+      <span><label for="histMonth" style="font-size:13px;color:var(--ink-2);margin-right:6px;">月份</label>
+      <select id="histMonth"></select></span>
+      <span class="attr-tabs" id="histAttr">
+        <button data-attr="TMP" class="on">温度</button><button data-attr="WS">风速</button>
+        <button data-attr="SSRD">辐照</button><button data-attr="RH">湿度</button>
+      </span>
+    </div>
+    <div class="chart" id="histChart"></div>
+    <div class="empty" id="histEmpty" style="display:none;">该月数据暂未入库（ERA5 入库滞后约 1~2 个月），请选择更早月份。</div>
+    <div class="note">数据源：ERA5 再分析（城市质心）。辐照为逐时平均辐照度（W/m²）。可拖动图内下方滑块缩放。</div>
+  </div>
+
+  <!-- Tab2 45天预测 -->
+  <div class="panel" id="panel-fc" style="display:none;">
+    <div class="stats" id="fcStats"></div>
+    <div style="display:flex; gap:14px; align-items:center; margin-top:12px;">
+      <span class="attr-tabs" id="fcAttr">
+        <button data-attr="TMP" class="on">温度</button><button data-attr="WS">风速</button>
+        <button data-attr="SSRD">辐照</button><button data-attr="RH">湿度</button>
+      </span>
+    </div>
+    <div class="chart" id="fcChart"></div>
+    <div class="note">数值天气预报（每日 12:00 UTC 起报一次），纵线为今日。辐照为逐时平均辐照度 W/m²。</div>
+  </div>
+
+  <!-- Tab3 预测日报表 -->
+  <div class="panel" id="panel-daily" style="display:none;">
+    <div class="tbl-wrap">
+      <table class="daily">
+        <thead><tr>
+          <th>日期</th><th>星期</th><th>最高温 ℃</th><th>最低温 ℃</th>
+          <th>平均风速 m/s</th><th>最大风速 m/s</th><th>日平均辐照 W/m²</th><th>平均湿度 %</th>
+        </tr></thead>
+        <tbody id="dailyBody"></tbody>
+      </table>
+    </div>
+    <div class="note">按北京时间自然日聚合最新起报的 45 天预报。日平均辐照 = 当日逐时辐照度平均值（W/m²）。* 起报当日仅含 20:00 起的小时数据，不代表全天；加粗行为今日。</div>
+  </div>
+
+  <!-- Tab4 同月多年对比 -->
+  <div class="panel" id="panel-cmp" style="display:none;">
+    <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center;">
+      <span><label for="cmpMonth" style="font-size:13px;color:var(--ink-2);margin-right:6px;">月份</label>
+      <select id="cmpMonth"></select></span>
+      <span class="attr-tabs" id="cmpAttr">
+        <button data-attr="TMP" class="on">温度</button><button data-attr="WS">风速</button>
+        <button data-attr="SSRD">辐照</button><button data-attr="RH">湿度</button>
+      </span>
+    </div>
+    <div class="chart" id="cmpChart"></div>
+    <div class="empty" id="cmpEmpty" style="display:none;">所选月份暂无可对比的历史数据。</div>
+    <div class="note">各年份当月逐日均值对比（ERA5 自 2024-01 起有数）。辐照为逐时均值再取日均（W/m²）。</div>
+  </div>
+</div>
+
+<script>
+/* ---------- 基础 ---------- */
+const $ = id => document.getElementById(id);
+const ATTRS = { TMP: {name:'温度', unit:'°C'}, WS: {name:'风速', unit:'m/s'},
+                SSRD: {name:'辐照', unit:'W/m²'}, RH: {name:'湿度', unit:'%'} };
+const YEAR_COLORS = { '2024': '#2a78d6', '2025': '#eb6834', '2026': '#1baf7a' };
+const state = { city: '370100', tab: 'hist', histMonth: null, histAttr: 'TMP',
+                fcAttr: 'TMP', cmpMonth: new Date().getMonth() + 1, cmpAttr: 'TMP' };
+const charts = {};                       // 懒初始化
+const apiCache = {};                     // url -> Promise<json>
+const STATIC = !!window.WX_STATIC;       // 静态托管模式：读 data/*.json；否则走 /api
+
+/* 数据地址：静态模式读生成好的 JSON，动态模式走本机服务 /api */
+function u(kind, p) {
+  if (STATIC) {
+    const d = 'data/';
+    if (kind === 'cities') return d + 'cities.json';
+    if (kind === 'months') return `${d}months_${p.adminCode}.json`;
+    if (kind === 'history') return `${d}history_${p.adminCode}_${p.month}.json`;
+    if (kind === 'forecast') return `${d}forecast_${p.adminCode}.json`;
+    if (kind === 'forecast_daily') return `${d}forecast_daily_${p.adminCode}.json`;
+    if (kind === 'history_years')
+      return `${d}years_${p.adminCode}_${String(p.month).padStart(2, '0')}_${p.attr}.json`;
+  }
+  const qs = Object.entries(p || {}).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  return `/api/${kind}${qs ? '?' + qs : ''}`;
+}
+
+function api(url) {
+  if (!apiCache[url]) {
+    showLoading(true); hideErr();
+    apiCache[url] = fetchJson(url, 3)
+      .catch(e => { delete apiCache[url]; showErr(url + '\n' + e.message); throw e; })
+      .finally(() => showLoading(false));
+  }
+  return apiCache[url];
+}
+/* 网络层瞬断（Failed to fetch）自动重试；服务端返回的 4xx/5xx 不重试 */
+async function fetchJson(url, retries) {
+  for (let i = 0; ; i++) {
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+      if (!r.ok || j.code) throw new Error(j.message || ('HTTP ' + r.status));
+      return j;
+    } catch (e) {
+      if (e instanceof TypeError && i < retries) {
+        await new Promise(res => setTimeout(res, 600 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+function showErr(m) { const e = $('err'); e.textContent = m; e.style.display = 'block'; }
+function hideErr() { $('err').style.display = 'none'; }
+function showLoading(b) { $('loading').style.display = b ? 'block' : 'none'; }
+
+/* 北京墙钟 -> epoch ms（与客户浏览器时区无关） */
+function bjMs(iso) {
+  const m = iso.match(/(\d+)-(\d+)-(\d+)T(\d+):(\d+)/);
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) - 8 * 3600e3;
+}
+function fmtBj(ms, withHour) {
+  const d = new Date(ms + 8 * 3600e3);
+  const p = n => String(n).padStart(2, '0');
+  let s = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+  return withHour ? s + ` ${p(d.getUTCHours())}:00` : s;
+}
+
+function getChart(id) {
+  if (!charts[id]) charts[id] = echarts.init($(id), null, { renderer: 'canvas' });
+  return charts[id];
+}
+function baseTimeAxis(titleText) {
+  return {
+    title: { text: titleText, left: 'center', top: 6, textStyle: { fontSize: 14, color: '#0b0b0b' } },
+    grid: { left: 64, right: 30, top: 44, bottom: 78 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } },
+      valueFormatter: v => (v == null ? '—' : (+v).toFixed(2)) },
+    xAxis: { type: 'time', axisLine: { lineStyle: { color: '#c3c2b7' } },
+      axisLabel: { color: '#898781', formatter: v => fmtBj(v, false) },
+      splitLine: { show: false } },
+    yAxis: { type: 'value', nameTextStyle: { color: '#898781' },
+      axisLabel: { color: '#898781' }, splitLine: { lineStyle: { color: '#e1e0d9' } } },
+    dataZoom: [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 30,
+      borderColor: '#c3c2b7', fillerColor: 'rgba(42,120,214,0.12)' }],
+    textStyle: { fontFamily: 'inherit' }
+  };
+}
+function lineSeries(name, data, color) {
+  return { name, type: 'line', data, showSymbol: false, symbolSize: 6,
+    lineStyle: { width: 2, color }, itemStyle: { color },
+    connectNulls: false, emphasis: { focus: 'series' } };
+}
+
+/* ---------- Tab1 历史逐小时 ---------- */
+async function loadHist() {
+  const mon = state.histMonth;
+  if (!mon) return;
+  const j = await api(u('history', { adminCode: state.city, month: mon }));
+  const c = getChart('histChart');
+  if (!j.hasData) {
+    c.clear(); $('histEmpty').style.display = 'block'; return;
+  }
+  $('histEmpty').style.display = 'none';
+  const attr = state.histAttr, meta = ATTRS[attr], s = j.series[attr];
+  const data = s.times.map((t, i) => [bjMs(t), s.values[i]]);
+  c.setOption({
+    ...baseTimeAxis(`${j.month} ${meta.name}（${meta.unit}）· 逐小时`),
+    yAxis: { ...baseTimeAxis().yAxis, name: meta.unit },
+    series: [lineSeries(meta.name, data, '#2a78d6')]
+  }, true);
+}
+
+/* ---------- Tab2 45天预测 ---------- */
+function renderFcStats(j) {
+  const daily = j._daily;
+  const box = $('fcStats');
+  const t1 = daily.rows[1] || {}, wk = daily.rows.slice(1, 8);
+  const avg = a => a.length ? (a.reduce((x, y) => x + y, 0) / a.length) : null;
+  const w7ws = avg(wk.map(r => r.ws_avg).filter(v => v != null));
+  const w7ss = avg(wk.map(r => r.ssrd_avg).filter(v => v != null));
+  const runBj = j.runDate.replace(/-/g, '/') + ' 20:00';
+  box.innerHTML = [
+    ['起报时次', runBj, ''],
+    ['明日最高温', t1.tmax != null ? t1.tmax : '—', '℃'],
+    ['明日最低温', t1.tmin != null ? t1.tmin : '—', '℃'],
+    ['未来7日平均风速', w7ws != null ? w7ws.toFixed(1) : '—', 'm/s'],
+    ['未来7日平均辐照', w7ss != null ? w7ss.toFixed(1) : '—', 'W/m²'],
+  ].map(([l, v, u]) => `<div class="stat"><div class="lab">${l}</div>
+    <div class="val">${v}<small>${u}</small></div></div>`).join('');
+}
+async function loadFc() {
+  const j = await api(u('forecast', { adminCode: state.city }));
+  if (!j._daily) j._daily = await api(u('forecast_daily', { adminCode: state.city }));
+  renderFcStats(j);
+  const attr = state.fcAttr, meta = ATTRS[attr], s = j.series[attr];
+  const data = s.times.map((t, i) => [bjMs(t), s.values[i]]);
+  const today0 = bjMs(fmtBj(Date.now(), false) + 'T00:00');
+  const c = getChart('fcChart');
+  c.setOption({
+    ...baseTimeAxis(`未来45天 ${meta.name}（${meta.unit}）· 起报 ${j.runDate} 20:00`),
+    yAxis: { ...baseTimeAxis().yAxis, name: meta.unit },
+    series: [{ ...lineSeries(meta.name, data, '#2a78d6'),
+      markLine: { symbol: 'none', label: { formatter: '今日', color: '#52514e' },
+        lineStyle: { color: '#898781', type: 'dashed', width: 1 },
+        data: [{ xAxis: today0 }] } }]
+  }, true);
+}
+
+/* ---------- Tab3 预测日报表 ---------- */
+async function loadDaily() {
+  const j = await api(u('forecast_daily', { adminCode: state.city }));
+  const wd = ['日', '一', '二', '三', '四', '五', '六'];
+  const today = fmtBj(Date.now(), false);
+  $('dailyBody').innerHTML = j.rows.map(r => {
+    const d = new Date(Date.UTC(+r.date.slice(0, 4), +r.date.slice(5, 7) - 1, +r.date.slice(8, 10)));
+    const f = v => v == null ? '—' : (+v).toFixed(1);
+    const isRunDay = r.date === j.rows[0].date;
+    return `<tr${r.date === today ? ' class="today"' : ''}>
+      <td>${r.date}${isRunDay ? '*' : ''}</td><td>${wd[d.getUTCDay()]}</td>
+      <td>${f(r.tmax)}</td><td>${f(r.tmin)}</td>
+      <td>${f(r.ws_avg)}</td><td>${f(r.ws_max)}</td>
+      <td>${r.ssrd_avg != null ? (+r.ssrd_avg).toFixed(1) : '—'}</td><td>${f(r.rh_avg)}</td></tr>`;
+  }).join('');
+}
+
+/* ---------- Tab4 同月多年对比 ---------- */
+async function loadCmp() {
+  const j = await api(u('history_years', { adminCode: state.city, month: state.cmpMonth, attr: state.cmpAttr }));
+  const c = getChart('cmpChart');
+  const years = Object.keys(j.years).sort();
+  if (!years.length) { c.clear(); $('cmpEmpty').style.display = 'block'; return; }
+  $('cmpEmpty').style.display = 'none';
+  const maxDay = 31;
+  const meta = ATTRS[j.attribute];
+  c.setOption({
+    title: { text: `${j.month}月 各年逐日${meta.name}均值（${j.unit}）`, left: 'center', top: 6,
+      textStyle: { fontSize: 14 } },
+    legend: { top: 34, textStyle: { color: '#52514e' }, itemWidth: 14, itemHeight: 3 },
+    grid: { left: 64, right: 64, top: 66, bottom: 44 },
+    tooltip: { trigger: 'axis', valueFormatter: v => (v == null ? '—' : (+v).toFixed(2)) },
+    xAxis: { type: 'category', name: '日', data: Array.from({ length: maxDay }, (_, i) => i + 1),
+      axisLine: { lineStyle: { color: '#c3c2b7' } }, axisLabel: { color: '#898781' },
+      boundaryGap: false },
+    yAxis: { type: 'value', name: j.unit, nameTextStyle: { color: '#898781' },
+      axisLabel: { color: '#898781' }, splitLine: { lineStyle: { color: '#e1e0d9' } } },
+    series: years.map(y => ({
+      name: y + '年', type: 'line', showSymbol: false, symbolSize: 6,
+      lineStyle: { width: 2, color: YEAR_COLORS[y] || '#898781' },
+      itemStyle: { color: YEAR_COLORS[y] || '#898781' },
+      data: Array.from({ length: maxDay }, (_, i) => j.years[y][String(i + 1)] ?? null),
+      connectNulls: false, emphasis: { focus: 'series' },
+      endLabel: { show: true, formatter: '{a}', color: '#52514e', fontSize: 12 },
+      labelLayout: { hideOverlap: true }
+    })),
+    textStyle: { fontFamily: 'inherit' }
+  }, true);
+}
+
+/* ---------- 装配 ---------- */
+const loaders = { hist: loadHist, fc: loadFc, daily: loadDaily, cmp: loadCmp };
+function switchTab(tab) {
+  state.tab = tab;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  for (const k of ['hist', 'fc', 'daily', 'cmp'])
+    $('panel-' + k).style.display = k === tab ? 'block' : 'none';
+  loaders[tab]().then(() => { const cid = { hist: 'histChart', fc: 'fcChart', cmp: 'cmpChart' }[tab];
+    if (cid && charts[cid]) charts[cid].resize(); }).catch(() => {});
+}
+function bindAttrTabs(id, key) {
+  $(id).querySelectorAll('button').forEach(b => b.onclick = () => {
+    $(id).querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    state[key] = b.dataset.attr;
+    loaders[state.tab]().catch(() => {});
+  });
+}
+async function boot() {
+  const cities = await api(u('cities'));
+  $('city').innerHTML = cities.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+  $('city').value = state.city;
+  $('city').onchange = () => {
+    state.city = $('city').value;
+    loaders[state.tab]().catch(() => {});
+  };
+  const mj = await api(u('months', { adminCode: state.city }));
+  state.histMonth = mj.latest;
+  $('histMonth').innerHTML = mj.months.slice().reverse()
+    .map(m => `<option value="${m}"${m === mj.latest ? ' selected' : ''}>${m}</option>`).join('');
+  $('histMonth').onchange = () => { state.histMonth = $('histMonth').value; loadHist().catch(() => {}); };
+  $('cmpMonth').innerHTML = Array.from({ length: 12 }, (_, i) =>
+    `<option value="${i + 1}"${i + 1 === state.cmpMonth ? ' selected' : ''}>${i + 1}月</option>`).join('');
+  $('cmpMonth').onchange = () => { state.cmpMonth = +$('cmpMonth').value; loadCmp().catch(() => {}); };
+  document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+  bindAttrTabs('histAttr', 'histAttr');
+  bindAttrTabs('fcAttr', 'fcAttr');
+  bindAttrTabs('cmpAttr', 'cmpAttr');
+  window.addEventListener('resize', () => Object.values(charts).forEach(c => c.resize()));
+  if (STATIC) {
+    fetch('data/meta.json').then(r => r.ok ? r.json() : null).then(m => {
+      if (m && m.generatedAt)
+        $('metaInfo').textContent = '数据更新于 ' + String(m.generatedAt).replace('T', ' ').slice(0, 16) + '（每日自动更新）';
+    }).catch(() => {});
+  }
+  loadHist().catch(() => {});
+}
+boot().catch(e => showErr(e.message));
+</script>
+</body>
+</html>
