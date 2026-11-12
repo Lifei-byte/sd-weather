@@ -9,7 +9,7 @@
 
 架构：Actions 每天北京时间 09:40 用 Secrets 里的凭据调 EnOS 接口 →
 `generate.py` 增量生成 `docs/` 静态站 → 推回仓库 → Pages 自动发布。
-公开地址：`https://<用户名>.github.io/<仓库名>/`
+公开地址：**https://lifei-byte.github.io/sd-weather/**（已上线）
 页面页脚显示「数据更新于 …（每日自动更新）」。
 
 首次配置（一次性，约 10 分钟）：
