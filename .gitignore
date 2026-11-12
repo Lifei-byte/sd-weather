@@ -1,0 +1,8 @@
+# 凭据绝不入库（CI 用 Secrets；本地读文件）
+AccessKey.txt
+# 上游原始缓存不入库（docs/data 才是持久状态）
+cache/
+serve.log
+.venv/
+__pycache__/
+*.tmp

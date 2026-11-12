@@ -1,0 +1,38 @@
+name: update-weather-site
+
+on:
+  schedule:
+    - cron: '40 1 * * *'    # 北京时间 09:40（UTC+8），新起报发布后
+  workflow_dispatch:        # 支持手动触发（首次回填可连点多几次）
+
+permissions:
+  contents: write           # generate.py --push 需要推送 docs/
+
+concurrency:
+  group: update-weather-site
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340    # 留 20 分钟余量（上限 360）；超时进度已按城市提交，下次续跑
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install pycryptodome
+
+      - name: Configure git
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Generate site (incremental, commits per city)
+        env:
+          ENOS_AK: ${{ secrets.ENOS_AK }}
+          ENOS_SK: ${{ secrets.ENOS_SK }}
+        run: python generate.py --push
