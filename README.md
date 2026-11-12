@@ -7,7 +7,7 @@
 
 ## 公网部署（GitHub Pages，免费 + 每日自动更新）
 
-架构：Actions 每天北京时间 09:40 用 Secrets 里的凭据调 EnOS 接口 →
+架构：Actions 每天北京时间 08:03 用 Secrets 里的凭据调 EnOS 接口 →
 `generate.py` 增量生成 `docs/` 静态站 → 推回仓库 → Pages 自动发布。
 公开地址：**https://lifei-byte.github.io/sd-weather/**（已上线）
 页面页脚显示「数据更新于 …（每日自动更新）」。
@@ -25,7 +25,7 @@
    仓库 Settings → Pages → Source 选 "Deploy from a branch" → 分支 `main`、目录 `/docs`
 6. 首次回填历史数据：Actions 页 → `update-weather-site` → `Run workflow`。
    首次约 1~3 小时（上游限流，按城市断点提交，超时/中断下次自动续跑），
-   之后每天 09:40 自动更新，单次仅几分钟。
+   之后每天 08:03 自动更新，单次仅几分钟。
 
 注意：
 - 页面**无鉴权**，任何知道链接的人都能看（数据为公开气象信息）；AK/SK 只在
