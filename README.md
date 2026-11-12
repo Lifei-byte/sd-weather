@@ -1,8 +1,40 @@
 # 山东省城市气象数据平台
 
-城市级气象历史（ERA5）+ 未来 45 天预测展示页，供客户浏览器访问。
+城市级气象历史（ERA5）+ 未来 45 天预测展示页，**两种运行形态**：
 
-## 启动
+1. **公网静态站（推荐，给客户看）**：GitHub Pages 托管 + GitHub Actions 每天自动更新，全球可访问，见下文「公网部署」
+2. **本机动态服务**：本机代理模式，数据实时，适合本机查看/调试
+
+## 公网部署（GitHub Pages，免费 + 每日自动更新）
+
+架构：Actions 每天北京时间 09:40 用 Secrets 里的凭据调 EnOS 接口 →
+`generate.py` 增量生成 `docs/` 静态站 → 推回仓库 → Pages 自动发布。
+公开地址：`https://<用户名>.github.io/<仓库名>/`
+页面页脚显示「数据更新于 …（每日自动更新）」。
+
+首次配置（一次性，约 10 分钟）：
+
+1. 注册 GitHub 账号（github.com）
+2. WSL 里登录 GitHub CLI（已装在 `~/.local/bin/gh`）：
+   `~/.local/bin/gh auth login`（选 GitHub.com → HTTPS → Login with a web browser）
+3. 存密钥（值在 AccessKey.txt）：
+   `~/.local/bin/gh secret set ENOS_AK` 和 `~/.local/bin/gh secret set ENOS_SK`
+4. 建仓并推送（在本目录执行）：
+   `~/.local/bin/gh repo create sd-weather --public --source=. --push`
+5. 开启 Pages（仓库须 public，免费版 Pages 只支持公开仓库）：
+   仓库 Settings → Pages → Source 选 "Deploy from a branch" → 分支 `main`、目录 `/docs`
+6. 首次回填历史数据：Actions 页 → `update-weather-site` → `Run workflow`。
+   首次约 1~3 小时（上游限流，按城市断点提交，超时/中断下次自动续跑），
+   之后每天 09:40 自动更新，单次仅几分钟。
+
+注意：
+- 页面**无鉴权**，任何知道链接的人都能看（数据为公开气象信息）；AK/SK 只在
+  GitHub Secrets 和本机 AccessKey.txt，不进代码、不上页面
+- 国内访问 github.io 个别网络下可能偏慢，属免费方案的固有取舍
+- 若公司政策不允许凭据上 GitHub：改为本机计划任务每天跑
+  `python generate.py` 后 `git push`，更新依赖本机开机，观看不受影响
+
+## 本机动态服务
 
 ```bash
 cd /山东/气象页面

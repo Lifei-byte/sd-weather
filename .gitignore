@@ -6,3 +6,9 @@ serve.log
 .venv/
 __pycache__/
 *.tmp
+.pw-browsers/
+.github-account.txt
+# 公司终端 DLP 扫描标记文件、本地日志、厂商接口文档原件
+*.endpointdlp
+serve_console.log
+城市级气象数据接口文档v1.docx
