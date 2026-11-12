@@ -63,9 +63,13 @@ VOLATILE_KEYS = ('fetchedAt', 'generatedAt')
 
 
 def _stable(obj):
-    """剥掉每次运行都变的时间戳，用于判断内容是否真的变了。"""
+    """剥掉每次运行都变的时间戳，并把键统一成字符串，用于判断内容是否真的变了。
+
+    键必须 str 化：month_daily_means 返回的是 int 日键，而 json 读回来的是 str，
+    {1: x} == {"1": x} 为 False，不统一会导致每次都判定为「变了」。
+    """
     if isinstance(obj, dict):
-        return {k: _stable(v) for k, v in obj.items() if k not in VOLATILE_KEYS}
+        return {str(k): _stable(v) for k, v in obj.items() if k not in VOLATILE_KEYS}
     if isinstance(obj, list):
         return [_stable(v) for v in obj]
     return obj
