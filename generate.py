@@ -34,7 +34,8 @@ DOCS = os.path.join(BASE_DIR, 'docs')
 DATA = os.path.join(DOCS, 'data')
 EPOCH_YEAR = 2024
 UNITS = {'TMP': '°C', 'WS': 'm/s', 'SSRD': 'W/m²', 'RH': '%'}
-RUN_CACHE_TTL = 6 * 3600      # 最新起报映射缓存 6h
+RUN_CACHE_TTL = 600           # 最新起报映射缓存 10 分钟：探测仅 1 次调用/运行，缓存只防同轮重复；
+                              # 6h 太长会导致上游恢复后/手动触发时沿用旧起报（2026-11-19 踩过）
 NAN_RETRY_AGE = 24 * 3600     # 未入库月 24h 后重探
 
 
